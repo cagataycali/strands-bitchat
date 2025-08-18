@@ -174,10 +174,10 @@ from strands_bitchat import bitchat
 agent = Agent(tools=[bitchat])
 
 # Start BitChat
-result = agent.tool.bitchat(action="start")
+result = agent.tool.bitchat(action="start", agent=agent)
 
 # Send message
-result = agent.tool.bitchat(action="send_public", message="Hello world!")
+result = agent.tool.bitchat(action="send_public", message="Hello world!", agent=agent)
 
 # Enable agent integration
 result = agent.tool.bitchat(action="enable_agent", trigger_keyword="max", agent=agent)
@@ -186,8 +186,8 @@ result = agent.tool.bitchat(action="enable_agent", trigger_keyword="max", agent=
 #### **Advanced Integration**
 ```python
 # Multi-channel coordination
-agent.tool.bitchat(action="join_channel", channel="#team", password="secret")
-agent.tool.bitchat(action="join_channel", channel="#public") 
+agent.tool.bitchat(action="join_channel", channel="#team", password="secret", agent=agent)
+agent.tool.bitchat(action="join_channel", channel="#public", agent=agent)
 
 # Automated responses across channels
 agent.tool.bitchat(action="enable_agent", trigger_keyword="assistant", agent=agent)
