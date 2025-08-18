@@ -1,0 +1,128 @@
+[build-system]
+requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "strands-bitchat"
+version = "1.0.1"
+description = "Decentralized P2P Encrypted Chat Agent powered by Strands Agents & Bluetooth LE"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Cagatay Cali", email = "cagataycali@icloud.com"}
+]
+maintainers = [
+    {name = "Cagatay Cali", email = "cagataycali@icloud.com"}
+]
+keywords = [
+    "strands-agents", "ai-agent", "bitchat", "p2p", "bluetooth", 
+    "encryption", "mesh-network", "decentralized", "privacy", 
+    "secure-chat", "noise-protocol", "ble", "agent-to-agent", 
+    "offline-communication"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Information Technology", 
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9", 
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Chat",
+    "Topic :: Internet",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Networking",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "strands-agents",
+    "strands-agents[ollama]",
+    "strands-agents-tools", 
+    "bleak>=0.20.0",
+    "pybloom-live>=4.0.0",
+    "lz4>=4.3.0",
+    "aioconsole>=0.6.0",
+    "cryptography>=41.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=22.0.0",
+    "flake8>=4.0.0",
+    "mypy>=0.950",
+    "twine>=4.0.0",
+    "build>=0.8.0",
+]
+docs = [
+    "sphinx>=4.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=0.18.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/cagataycali/strands-bitchat"
+Documentation = "https://github.com/cagataycali/strands-bitchat#readme"
+Repository = "https://github.com/cagataycali/strands-bitchat"
+"Bug Tracker" = "https://github.com/cagataycali/strands-bitchat/issues"
+
+[project.scripts]
+strands-bitchat = "agent:main"
+
+[project.entry-points.strands_tools]
+bitchat = "src.tools.bitchat:bitchat"
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*", "agent*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.md", "*.txt", "*.yml", "*.yaml", "*.json"]
+"src" = ["**/*.py"]
+"src.tools" = ["*.py"]
+
+[tool.black]
+line-length = 88
+target-version = ['py310', 'py311', 'py312']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
