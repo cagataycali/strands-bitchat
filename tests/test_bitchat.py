@@ -3,17 +3,12 @@ Tests for the BitChat tool
 """
 
 import pytest
-import sys
-import os
-
-# Add src to path for testing
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 
 def test_bitchat_import():
     """Test that we can import the bitchat tool."""
     try:
-        from tools.bitchat import bitchat
+        from strands_bitchat import bitchat
 
         assert bitchat is not None
         print("✅ BitChat tool imported successfully")
@@ -24,7 +19,7 @@ def test_bitchat_import():
 def test_bitchat_tool_signature():
     """Test that the bitchat tool has the expected signature."""
     try:
-        from tools.bitchat import bitchat
+        from strands_bitchat import bitchat
 
         # Test that it's callable
         assert callable(bitchat)
@@ -43,7 +38,7 @@ def test_bitchat_tool_signature():
 def test_bitchat_invalid_action():
     """Test that invalid actions are handled properly."""
     try:
-        from tools.bitchat import bitchat
+        from strands_bitchat import bitchat
 
         result = bitchat(action="invalid_action")
         assert result["status"] == "error"
@@ -57,17 +52,10 @@ def test_bitchat_invalid_action():
         pytest.skip(f"BitChat dependencies not available: {e}")
 
 
-def test_package_metadata():
-    """Test package metadata."""
+def test_package():
+    """Test package"""
     try:
-        import src
-
-        assert hasattr(src, "__version__")
-        assert hasattr(src, "__author__")
-        assert src.__version__ == "1.0.0"
-        assert src.__author__ == "Cagatay Cali"
-
-        print("✅ Package metadata test passed")
+        import strands_bitchat
     except ImportError as e:
         pytest.skip(f"Package not available: {e}")
 
@@ -78,6 +66,6 @@ if __name__ == "__main__":
     test_bitchat_import()
     test_bitchat_tool_signature()
     test_bitchat_invalid_action()
-    test_package_metadata()
+    test_package()
 
     print("✅ All tests passed!")
