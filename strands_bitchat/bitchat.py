@@ -46,6 +46,7 @@ _peer_list = {}
 _trigger_keyword = None
 _parent_agent = None
 _auto_response_enabled = False
+_monitor_mode_enabled = False
 
 
 def _log_sent_message(content, is_private=False, channel=None, recipient=None):
@@ -1922,24 +1923,40 @@ class BitchatClient:
             "last_seen": time.time(),
         }
 
-        # Check for agent trigger
-        if (
-            _auto_response_enabled
-            and _trigger_keyword
-            and _parent_agent
-            and _trigger_keyword.lower() in display_content.lower()
-            and packet.sender_id_str != self.my_peer_id
-        ):
+        # Check for agent trigger or monitor mode
+        should_trigger_agent = False
+        should_auto_respond = False
+
+        if _parent_agent and packet.sender_id_str != self.my_peer_id:
+            # Monitor mode: process all messages but don't auto-respond
+            if _monitor_mode_enabled:
+                should_trigger_agent = True
+                should_auto_respond = False
+
+            # Trigger mode: process and auto-respond to keyword matches
+            elif (
+                _auto_response_enabled
+                and _trigger_keyword
+                and _trigger_keyword.lower() in display_content.lower()
+            ):
+                should_trigger_agent = True
+                should_auto_respond = True
+
+        if should_trigger_agent:
 
             try:
-                # Extract command after trigger
-                trigger_idx = display_content.lower().find(_trigger_keyword.lower())
-                if trigger_idx != -1:
-                    start_pos = trigger_idx + len(_trigger_keyword)
-                    prompt_text = display_content[start_pos:].strip()
-                    if not prompt_text:
+                # Extract command after trigger (only for trigger mode)
+                if should_auto_respond and _trigger_keyword:
+                    trigger_idx = display_content.lower().find(_trigger_keyword.lower())
+                    if trigger_idx != -1:
+                        start_pos = trigger_idx + len(_trigger_keyword)
+                        prompt_text = display_content[start_pos:].strip()
+                        if not prompt_text:
+                            prompt_text = display_content.strip()
+                    else:
                         prompt_text = display_content.strip()
                 else:
+                    # Monitor mode: use full message content
                     prompt_text = display_content.strip()
 
                 # Build context
@@ -1972,18 +1989,38 @@ class BitchatClient:
                         "You are running in BitChat, powered by Strands Agents."
                     )
 
-                # Enhanced system prompt
+                # Enhanced system prompt - different for trigger vs monitor mode
+                if should_auto_respond:
+                    # Trigger mode: expects and should send responses
+                    mode_description = (
+                        f"TRIGGER MODE - Auto-responding to '{_trigger_keyword}'"
+                    )
+                    behavior_instructions = (
+                        f"IMPORTANT BEHAVIOR GUIDELINES:\n"
+                        f"- You are responding to a BitChat message triggered by '{_trigger_keyword}'\n"
+                        f"- You SHOULD respond back using the 'bitchat' tool\n"
+                        f"- Keep responses concise and conversational\n"
+                        f"- Use the 'bitchat' tool to send responses back to the network\n"
+                    )
+                else:
+                    # Monitor mode: processes but doesn't auto-respond
+                    mode_description = "MONITOR MODE - Receive all messages"
+                    behavior_instructions = (
+                        f"IMPORTANT BEHAVIOR GUIDELINES:\n"
+                        f"- You are monitoring BitChat messages\n"
+                        f"- You SHOULD respond back using the 'bitchat' tool\n"
+                        f"- This is for learning context and understanding conversations\n"
+                    )
+
                 enhanced_system_prompt = (
                     _parent_agent.system_prompt
                     + f"\n\n=== BITCHAT INTEGRATION MODE ===\n"
-                    f"You are responding to a BitChat message triggered by '{_trigger_keyword}'.\n"
+                    + mode_description
+                    + "\n"
                     f"Message from {sender_nick}: '{display_content}'\n"
-                    f"Extracted command: '{prompt_text}'\n"
                     f"Message type: {'Private DM' if is_private else ('Channel: ' + message.channel if message.channel else 'Public broadcast')}\n\n"
-                    f"IMPORTANT BEHAVIOR GUIDELINES:\n"
-                    f"- You are part of a P2P encrypted chat network over Bluetooth\n"
-                    f"- Keep responses concise and conversational\n"
-                    f"- Use the 'bitchat' to send responses back to the network\n"
+                    + behavior_instructions
+                    + f"- You are part of a P2P encrypted chat network over Bluetooth\n"
                     f"- Current context: {'Private message' if is_private else ('Channel: ' + message.channel if message.channel else 'Public chat')}\n"
                     f"- Sender: {sender_nick} (ID: {packet.sender_id_str[:8]}...)\n"
                     + conversation_context
@@ -2010,56 +2047,71 @@ class BitchatClient:
                 if len(response_text) == 0:
                     return
 
-                # Send response back
-                if is_private:
-                    await self._send_private_message_async(
-                        response_text, packet.sender_id_str, sender_nick
-                    )
-                    # Log agent response as sent private message
-                    agent_message_entry = {
-                        "timestamp": time.time(),
-                        "sender": "strands-agent",
-                        "sender_id": self.my_peer_id or "agent",
-                        "content": response_text,
-                        "is_private": True,
-                        "channel": None,
-                        "recipient": sender_nick,
-                        "message_id": f"agent_response_{int(time.time())}",
-                        "display": f"[AGENT_RESPONSE] {response_text}",
-                    }
-                elif message.channel:
-                    await self._send_channel_message_async(
-                        response_text, message.channel
-                    )
-                    # Log agent response as sent channel message
-                    agent_message_entry = {
-                        "timestamp": time.time(),
-                        "sender": "strands-agent",
-                        "sender_id": self.my_peer_id or "agent",
-                        "content": response_text,
-                        "is_private": False,
-                        "channel": message.channel,
-                        "recipient": None,
-                        "message_id": f"agent_response_{int(time.time())}",
-                        "display": f"[AGENT_RESPONSE] {response_text}",
-                    }
-                else:
-                    await self._send_public_message_async(response_text)
-                    # Log agent response as sent public message
-                    agent_message_entry = {
-                        "timestamp": time.time(),
-                        "sender": "strands-agent",
-                        "sender_id": self.my_peer_id or "agent",
-                        "content": response_text,
-                        "is_private": False,
-                        "channel": None,
-                        "recipient": None,
-                        "message_id": f"agent_response_{int(time.time())}",
-                        "display": f"[AGENT_RESPONSE] {response_text}",
-                    }
+                # Send response back only in trigger mode (auto-respond)
+                if should_auto_respond:
+                    if is_private:
+                        await self._send_private_message_async(
+                            response_text, packet.sender_id_str, sender_nick
+                        )
+                        # Log agent response as sent private message
+                        agent_message_entry = {
+                            "timestamp": time.time(),
+                            "sender": "strands-agent",
+                            "sender_id": self.my_peer_id or "agent",
+                            "content": response_text,
+                            "is_private": True,
+                            "channel": None,
+                            "recipient": sender_nick,
+                            "message_id": f"agent_response_{int(time.time())}",
+                            "display": f"[AGENT_AUTO_RESPONSE] {response_text}",
+                        }
+                    elif message.channel:
+                        await self._send_channel_message_async(
+                            response_text, message.channel
+                        )
+                        # Log agent response as sent channel message
+                        agent_message_entry = {
+                            "timestamp": time.time(),
+                            "sender": "strands-agent",
+                            "sender_id": self.my_peer_id or "agent",
+                            "content": response_text,
+                            "is_private": False,
+                            "channel": message.channel,
+                            "recipient": None,
+                            "message_id": f"agent_response_{int(time.time())}",
+                            "display": f"[AGENT_AUTO_RESPONSE] {response_text}",
+                        }
+                    else:
+                        await self._send_public_message_async(response_text)
+                        # Log agent response as sent public message
+                        agent_message_entry = {
+                            "timestamp": time.time(),
+                            "sender": "strands-agent",
+                            "sender_id": self.my_peer_id or "agent",
+                            "content": response_text,
+                            "is_private": False,
+                            "channel": None,
+                            "recipient": None,
+                            "message_id": f"agent_response_{int(time.time())}",
+                            "display": f"[AGENT_AUTO_RESPONSE] {response_text}",
+                        }
 
-                # Log agent response
-                _message_history.append(agent_message_entry)
+                    # Log agent response
+                    _message_history.append(agent_message_entry)
+                else:
+                    # Monitor mode: just log that agent processed the message but didn't respond
+                    monitor_log_entry = {
+                        "timestamp": time.time(),
+                        "sender": "strands-agent",
+                        "sender_id": self.my_peer_id or "agent",
+                        "content": f"[PROCESSED] Message from {sender_nick}: {display_content[:50]}...",
+                        "is_private": False,
+                        "channel": None,
+                        "recipient": None,
+                        "message_id": f"agent_monitor_{int(time.time())}",
+                        "display": f"[AGENT_MONITOR] Processed message from {sender_nick}",
+                    }
+                    _message_history.append(monitor_log_entry)
 
             except Exception:
                 pass
@@ -2591,7 +2643,9 @@ def bitchat(
     - transfer_ownership: Transfer channel ownership
     - enable_agent: Enable agent trigger functionality (like listen tool)
     - disable_agent: Disable agent trigger functionality
-    - agent_status: Check agent trigger status
+    - enable_monitor: Enable silent monitoring of all messages (no auto-response)
+    - disable_monitor: Disable monitor mode
+    - agent_status: Check agent trigger and monitor status
 
     Args:
         action: The action to perform
@@ -2613,6 +2667,9 @@ def bitchat(
         # Enable agent responses to "strands" trigger in messages
         bitchat(action="enable_agent", trigger_keyword="strands", agent=agent)
 
+        # Enable silent monitoring of all messages (no auto-response)
+        bitchat(action="enable_monitor", agent=agent)
+
         # Send public message
         bitchat(action="send_public", message="Hello everyone!")
 
@@ -2628,10 +2685,10 @@ def bitchat(
         # Get status
         bitchat(action="status")
 
-        # Check agent trigger status
+        # Check agent trigger and monitor status
         bitchat(action="agent_status")
     """
-    global _bitchat_client, _bitchat_thread, _bitchat_running, _bitchat_status, _message_history, _peer_list, _trigger_keyword, _parent_agent, _auto_response_enabled
+    global _bitchat_client, _bitchat_thread, _bitchat_running, _bitchat_status, _message_history, _peer_list, _trigger_keyword, _parent_agent, _auto_response_enabled, _monitor_mode_enabled
 
     try:
         if action == "start":
@@ -3139,26 +3196,71 @@ def bitchat(
                 ],
             }
 
+        elif action == "enable_monitor":
+            if not agent:
+                return {
+                    "status": "error",
+                    "content": [
+                        {"text": "❌ agent parameter is required for enable_monitor"}
+                    ],
+                }
+
+            _parent_agent = agent
+            _monitor_mode_enabled = True
+            _auto_response_enabled = (
+                False  # Disable trigger mode when enabling monitor mode
+            )
+            _trigger_keyword = None
+
+            return {
+                "status": "success",
+                "content": [
+                    {
+                        "text": "🔍 Monitor mode enabled! Agent will silently process all BitChat messages but not auto-respond"
+                    }
+                ],
+            }
+
+        elif action == "disable_monitor":
+            _monitor_mode_enabled = False
+
+            return {
+                "status": "success",
+                "content": [{"text": "🔍❌ Monitor mode disabled"}],
+            }
+
         elif action == "disable_agent":
             _trigger_keyword = None
             _parent_agent = None
             _auto_response_enabled = False
+            _monitor_mode_enabled = False  # Also disable monitor mode
 
             return {
                 "status": "success",
-                "content": [{"text": "🤖❌ Agent trigger disabled"}],
+                "content": [{"text": "🤖❌ Agent trigger and monitor modes disabled"}],
             }
 
         elif action == "agent_status":
-            status_text = f"""🤖 Agent Trigger Status:
+            status_text = f"""🤖 Agent Integration Status:
 
+**📡 TRIGGER MODE:**
 ✅ **Enabled:** {_auto_response_enabled}
 🔍 **Trigger Keyword:** {_trigger_keyword or 'None'}
+📝 **Auto-Response:** {'Yes' if _auto_response_enabled else 'No'}
+
+**🔍 MONITOR MODE:**
+✅ **Enabled:** {_monitor_mode_enabled}
+
+**🤖 GENERAL:**
 🤖 **Agent Connected:** {_parent_agent is not None}
 📡 **BitChat Running:** {_bitchat_running}
-🔗 **Ready for Triggers:** {_auto_response_enabled and _trigger_keyword and _parent_agent and _bitchat_running}
+📊 **Messages Processed:** {len(_message_history)}
 
-{'✅ All systems ready for automatic responses!' if (_auto_response_enabled and _trigger_keyword and _parent_agent and _bitchat_running) else '⚠️ Some components not ready - check status above'}
+**🔗 READY STATUS:**
+🎯 **Trigger Ready:** {_auto_response_enabled and _trigger_keyword and _parent_agent and _bitchat_running}
+👁️ **Monitor Ready:** {_monitor_mode_enabled and _parent_agent and _bitchat_running}
+
+{'✅ Agent integration active!' if ((_auto_response_enabled or _monitor_mode_enabled) and _parent_agent and _bitchat_running) else '⚠️ Agent integration not fully configured'}
 """
 
             return {"status": "success", "content": [{"text": status_text}]}
@@ -3168,7 +3270,7 @@ def bitchat(
                 "status": "error",
                 "content": [
                     {
-                        "text": f"❌ Unknown action: {action}. Available actions: start, stop, status, send_public, send_private, send_channel, join_channel, leave_channel, list_peers, list_channels, block_user, unblock_user, set_nickname, get_messages, channel_password, transfer_ownership, enable_agent, disable_agent, agent_status"
+                        "text": f"❌ Unknown action: {action}. Available actions: start, stop, status, send_public, send_private, send_channel, join_channel, leave_channel, list_peers, list_channels, block_user, unblock_user, set_nickname, get_messages, channel_password, transfer_ownership, enable_agent, disable_agent, enable_monitor, disable_monitor, agent_status"
                     }
                 ],
             }
