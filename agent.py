@@ -3,7 +3,7 @@ from strands import Agent
 from strands.models.ollama import OllamaModel
 from strands_tools import use_agent
 
-from src.tools import bitchat
+from strands_bitchat import bitchat
 
 model = OllamaModel(
     host="http://localhost:11434", model_id=os.getenv("STRANDS_MODEL_ID", "qwen3:8b")
