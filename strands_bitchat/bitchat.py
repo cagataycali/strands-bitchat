@@ -48,6 +48,27 @@ _parent_agent = None
 _auto_response_enabled = False
 
 
+def _log_sent_message(content, is_private=False, channel=None, recipient=None):
+    """Log sent messages to history"""
+    global _message_history
+    message_entry = {
+        "timestamp": time.time(),
+        "sender": "strands-agent",  # Our nickname
+        "sender_id": "self",
+        "content": content,
+        "is_private": is_private,
+        "channel": channel,
+        "recipient": recipient,
+        "message_id": f"sent_{int(time.time())}",
+        "display": f"[SENT] {content}",
+    }
+    _message_history.append(message_entry)
+
+    # Keep last 100 messages
+    if len(_message_history) > 100:
+        _message_history = _message_history[-100:]
+
+
 def _install_dependencies():
     """Install required BitChat dependencies."""
     dependencies = [
@@ -1171,7 +1192,7 @@ def unpad_message(data: bytes) -> bytes:
 class BitchatClient:
     def __init__(self):
         self.my_peer_id = os.urandom(8).hex()
-        self.nickname = "maxs-agent"
+        self.nickname = "strands-agent"
         self.peers: Dict[str, Peer] = {}
         self.processed_messages: Set[str] = set()
         self.fragment_collector = FragmentCollector()
@@ -1323,7 +1344,7 @@ class BitchatClient:
         if self.app_state.nickname:
             self.nickname = self.app_state.nickname
         else:
-            self.nickname = "maxs-agent"
+            self.nickname = "strands-agent"
 
         # Send announce if connected
         if self.client and self.characteristic:
@@ -1981,29 +2002,63 @@ class BitchatClient:
                 if response and "content" in response and response["content"]:
                     response_text = response["content"][0].get("text", "No response")
 
+                    # if the response just Response: <text>, remove the Response: part
+                    if response_text.startswith("Response:"):
+                        response_text = response_text[9:].strip()
+
+                # early return if the len(response_text) is 0
+                if len(response_text) == 0:
+                    return
+
                 # Send response back
                 if is_private:
                     await self._send_private_message_async(
                         response_text, packet.sender_id_str, sender_nick
                     )
+                    # Log agent response as sent private message
+                    agent_message_entry = {
+                        "timestamp": time.time(),
+                        "sender": "strands-agent",
+                        "sender_id": self.my_peer_id or "agent",
+                        "content": response_text,
+                        "is_private": True,
+                        "channel": None,
+                        "recipient": sender_nick,
+                        "message_id": f"agent_response_{int(time.time())}",
+                        "display": f"[AGENT_RESPONSE] {response_text}",
+                    }
                 elif message.channel:
                     await self._send_channel_message_async(
                         response_text, message.channel
                     )
+                    # Log agent response as sent channel message
+                    agent_message_entry = {
+                        "timestamp": time.time(),
+                        "sender": "strands-agent",
+                        "sender_id": self.my_peer_id or "agent",
+                        "content": response_text,
+                        "is_private": False,
+                        "channel": message.channel,
+                        "recipient": None,
+                        "message_id": f"agent_response_{int(time.time())}",
+                        "display": f"[AGENT_RESPONSE] {response_text}",
+                    }
                 else:
                     await self._send_public_message_async(response_text)
+                    # Log agent response as sent public message
+                    agent_message_entry = {
+                        "timestamp": time.time(),
+                        "sender": "strands-agent",
+                        "sender_id": self.my_peer_id or "agent",
+                        "content": response_text,
+                        "is_private": False,
+                        "channel": None,
+                        "recipient": None,
+                        "message_id": f"agent_response_{int(time.time())}",
+                        "display": f"[AGENT_RESPONSE] {response_text}",
+                    }
 
                 # Log agent response
-                agent_message_entry = {
-                    "timestamp": time.time(),
-                    "sender": "maxs-agent",
-                    "sender_id": self.my_peer_id or "agent",
-                    "content": f"[AGENT_RESPONSE] {response_text}",
-                    "is_private": is_private,
-                    "channel": message.channel,
-                    "message_id": f"agent_{int(time.time())}",
-                    "display": f"Agent: {response_text}",
-                }
                 _message_history.append(agent_message_entry)
 
             except Exception:
@@ -2555,8 +2610,8 @@ def bitchat(
         # Start BitChat
         bitchat(action="start")
 
-        # Enable agent responses to "max" trigger in messages
-        bitchat(action="enable_agent", trigger_keyword="max", agent=agent)
+        # Enable agent responses to "strands" trigger in messages
+        bitchat(action="enable_agent", trigger_keyword="strands", agent=agent)
 
         # Send public message
         bitchat(action="send_public", message="Hello everyone!")
@@ -2673,6 +2728,12 @@ def bitchat(
                     await _bitchat_client.send_public_message(message)
 
                 _execute_bitchat_command(send_msg)
+
+                # Log the sent message
+                _log_sent_message(
+                    message, is_private=False, channel=None, recipient=None
+                )
+
                 return {
                     "status": "success",
                     "content": [{"text": f"📢 Public message sent: {message[:50]}..."}],
@@ -2717,6 +2778,12 @@ def bitchat(
                     )
 
                 _execute_bitchat_command(send_private_msg)
+
+                # Log the sent private message
+                _log_sent_message(
+                    message, is_private=True, channel=None, recipient=recipient
+                )
+
                 return {
                     "status": "success",
                     "content": [
@@ -2751,6 +2818,15 @@ def bitchat(
                     await _bitchat_client.send_public_message(message)
 
                 _execute_bitchat_command(send_channel_msg)
+
+                # Log the sent channel message
+                _log_sent_message(
+                    message,
+                    is_private=False,
+                    channel=channel or "current channel",
+                    recipient=None,
+                )
+
                 current_channel = channel or "current channel"
                 return {
                     "status": "success",

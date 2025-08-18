@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "strands-bitchat"
-version = "1.0.4"
+version = "1.0.6"
 description = "Decentralized P2P Encrypted Chat Agent powered by Strands Agents & Bluetooth LE"
 readme = "README.md"
 license = {text = "MIT"}
@@ -81,19 +81,19 @@ Repository = "https://github.com/cagataycali/strands-bitchat"
 strands-bitchat = "agent:main"
 
 [project.entry-points.strands_tools]
-bitchat = "src.tools.bitchat:bitchat"
+bitchat = "strands_bitchat.tools.bitchat:bitchat"
 
 [tool.setuptools]
 package-dir = {"" = "."}
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["src*", "agent*"]
+include = ["strands_bitchat*", "agent*"]
 
 [tool.setuptools.package-data]
 "*" = ["*.md", "*.txt", "*.yml", "*.yaml", "*.json"]
-"src" = ["**/*.py"]
-"src.tools" = ["*.py"]
+"strands_bitchat" = ["**/*.py"]
+"strands_bitchat.tools" = ["*.py"]
 
 [tool.black]
 line-length = 88

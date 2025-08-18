@@ -37,7 +37,7 @@ def read_requirements():
 
 setup(
     name="strands-bitchat",
-    version="1.0.4",
+    version="1.0.6",
     author="Cagatay Cali",
     author_email="cagataycali@icloud.com",
     description="Decentralized P2P Encrypted Chat Agent powered by Strands Agents & Bluetooth LE",
@@ -52,8 +52,8 @@ setup(
     packages=find_packages(),
     package_data={
         "": ["*.md", "*.txt", "*.yml", "*.yaml", "*.json"],
-        "src": ["**/*.py"],
-        "src.tools": ["*.py"],
+        "strands_bitchat": ["**/*.py"],
+        "strands_bitchat.tools": ["*.py"],
     },
     include_package_data=True,
     classifiers=[
